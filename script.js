@@ -3,24 +3,27 @@ const ctx = canvas.getContext("2d");
 const centerX = canvas.width / 2;
 const centerY = canvas.height / 2;
 const radius = 200;
-const numSlices = 2;
-const images = ["Mi.jpg", "Bun.jpg"];
-const sliceAngle = (2 * Math.PI) / numSlices;
+const biasSlider = document.getElementById("biasSlider");
+const spinButton = document.getElementById("spinButton");
+
+// Define possible results
+let result1 = "Mi";
+let result2 = "Bun";
+const images = ["Mi.png", "Bun.png"];
 
 const loadedImages = [];
 let angle = 0;
 let spinning = false;
 let speed = 0;
+const deceleration = 0.98;
 
-// Popup elements
 const winnerPopup = document.getElementById("winnerPopup");
-const popupContent = document.getElementById("popupContent");
 const winnerMessage = document.getElementById("winnerMessage");
 const winnerImage = document.getElementById("winnerImage");
 
 winnerPopup.style.display = "none";
 
-// Load images for slices
+// Load images before drawing the wheel
 function loadImages(callback) {
     let count = 0;
     images.forEach((src, i) => {
@@ -35,34 +38,50 @@ function loadImages(callback) {
     });
 }
 
+// Calculate slice angles based on the slider position
+function getSliceAngles() {
+    let biasValue = parseFloat(biasSlider.value);
+    let percentage = (biasValue + 1) / 2; // Convert -1 to 1 range into 0 to 1
+    let angle1 = percentage * (2 * Math.PI - 0.2) + 0.1; // Avoid 0-degree slices
+    let angle2 = 2 * Math.PI - angle1;
+    return [angle1, angle2];
+}
+
+// Draw the wheel with variable slice sizes
 function drawWheel(rotation = 0) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     ctx.translate(centerX, centerY);
     ctx.rotate(rotation);
 
-    for (let i = 0; i < numSlices; i++) {
+    const sliceAngles = getSliceAngles();
+    let currentAngle = 0;
+
+    for (let i = 0; i < images.length; i++) {
         ctx.beginPath();
         ctx.moveTo(0, 0);
-        ctx.arc(0, 0, radius, i * sliceAngle, (i + 1) * sliceAngle);
+        ctx.arc(0, 0, radius, currentAngle, currentAngle + sliceAngles[i]);
         ctx.closePath();
         ctx.fillStyle = i % 2 === 0 ? "#FFD700" : "#FF6347";
         ctx.fill();
         ctx.stroke();
 
-        // Position images in the middle of each slice
-        const angleSlice = i * sliceAngle + sliceAngle / 2;
-        const imgX = Math.cos(angleSlice) * radius * 0.6 - 30;
-        const imgY = Math.sin(angleSlice) * radius * 0.6 - 30;
+        const angleSlice = currentAngle + sliceAngles[i] / 2;
+        const sliceSizeFactor = sliceAngles[i] / (2 * Math.PI);
+        const imgSize = 80 + sliceSizeFactor * 120; // Dynamic scaling
+
+        const imgX = Math.cos(angleSlice) * radius * 0.6 - imgSize / 2;
+        const imgY = Math.sin(angleSlice) * radius * 0.6 - imgSize / 2;
         if (loadedImages[i]) {
-            ctx.drawImage(loadedImages[i], imgX, imgY, 60, 60);
+            ctx.drawImage(loadedImages[i], imgX, imgY, imgSize, imgSize);
         }
+        currentAngle += sliceAngles[i];
     }
 
     ctx.restore();
-    drawNeedle();
 }
 
+// Draw the red needle at the top
 function drawNeedle() {
     ctx.beginPath();
     ctx.moveTo(centerX, centerY - radius - 20);
@@ -73,45 +92,69 @@ function drawNeedle() {
     ctx.fill();
 }
 
+// Start spinning the wheel
 function spinWheel() {
     if (spinning) return;
 
-    winnerPopup.style.display = "none"; // Hide popup before spinning
+    winnerPopup.style.display = "none";
     spinning = true;
     speed = Math.random() * 10 + 15;
-    let deceleration = 0.98;
+
+    const sliceAngles = getSliceAngles();
+
+    // Calculate the stopping position based on slice sizes
+    let randomStopAngle = Math.random() * (2 * Math.PI);
+    let accumulatedAngle = 0;
+    let winningIndex = 0;
+
+    for (let i = 0; i < images.length; i++) {
+        accumulatedAngle += sliceAngles[i];
+        if (randomStopAngle < accumulatedAngle) {
+            winningIndex = i;
+            break;
+        }
+    }
+
+    let totalSpins = Math.floor(Math.random() * 5 + 5); // 5 to 10 full spins
+    let finalStopAngle = totalSpins * (2 * Math.PI) + randomStopAngle;
 
     function animate() {
         if (speed > 0.1) {
             angle += speed * (Math.PI / 180);
             speed *= deceleration;
             drawWheel(angle);
+            drawNeedle();
             requestAnimationFrame(animate);
         } else {
             spinning = false;
-            angle %= (2 * Math.PI);
-            declareWinner();
+            angle = finalStopAngle % (2 * Math.PI);
+            declareWinner(winningIndex);
         }
     }
 
     animate();
 }
 
-function declareWinner() {
-    let finalAngle = (2 * Math.PI - angle) % (2 * Math.PI);
-    let winningIndex = Math.floor(finalAngle / sliceAngle) % numSlices;
-    let winner = images[winningIndex];
+// Show the winner in a popup
+function declareWinner(winningIndex) {
+    let winner = winningIndex === 0 ? result1 : result2;
 
-    // Show popup with winner
     winnerMessage.textContent = "Winner: " + winner;
-    winnerImage.src = winner;
-    winnerPopup.style.display = "flex";
+    winnerImage.src = images[winningIndex]; // Show winner image
+
+    setTimeout(() => {
+        winnerPopup.style.display = "flex";
+    }, 500);
 }
 
-// Close popup when clicking anywhere
+// Close popup on click
 winnerPopup.addEventListener("click", () => {
     winnerPopup.style.display = "none";
 });
 
-document.getElementById("spinButton").addEventListener("click", spinWheel);
+// Update the wheel live when the slider moves
+biasSlider.addEventListener("input", () => drawWheel(angle));
+
+// Start drawing once images are loaded
+spinButton.addEventListener("click", spinWheel);
 loadImages(() => drawWheel(angle));
