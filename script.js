@@ -4,7 +4,7 @@ const centerX = canvas.width / 2;
 const centerY = canvas.height / 2;
 const radius = 200;
 const numSlices = 2;
-const images = ["aaa.jpg", "bbb.png"];
+const images = ["Mi.jpg", "Bun.jpg"];
 const sliceAngle = (2 * Math.PI) / numSlices;
 
 const loadedImages = [];
